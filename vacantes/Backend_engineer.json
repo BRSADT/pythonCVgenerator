@@ -1,0 +1,9 @@
+{
+  "name": "Backend Engineer",
+  "min_years_exp": 2,
+  "required_stack": ["Python" ],
+  "nice_to_have": ["Git"],
+  "must_keywords": ["microservicios", "apis"],
+  "weights": {"keywords":0.25,"stack":0.40,"exp":0.10,"metrics":0.10,"soft":0.05,"nice":0.10},
+  "threshold": 0.56
+}
