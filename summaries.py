@@ -2,7 +2,8 @@
 import random
 from typing import Optional
 from typing import Dict, Callable, Optional, List, Tuple
-
+from catalogs import SUMMARY_FILLERS, INDUSTRIAS, HARD_SKILLS_POOL
+import re, random
 # ---- Dependencias que YA tienes en tu proyecto ----
 # from catalogs import ROLE_KEYWORDS, ROLE_STACKS
 # from gen import infer_base_role, _pick_metric_for_role, _effect_verb
@@ -38,21 +39,57 @@ def _weighted_pick(d: dict) -> str:
         if r <= acc: return k
     return next(iter(d))  # fallback
 
-def _assemble(frases, length: str, min_sentences: int) -> str:
-    frases = [f for f in frases if f]
-    if not frases: return ""
-    # asegura mínimo
-    if len(frases) < min_sentences:
-        # intenta duplicar con variantes suaves
-        while len(frases) < min_sentences:
-            frases.append(random.choice(frases))
+def _target_sentence_count(length: str) -> int:
+    """short=2, medium=3–4, long=5 (1 párrafo ‘bonito’)."""
     if length == "short":
-        out = " ".join(frases[:max(1, min_sentences)])
-    elif length == "medium":
-        out = " ".join(frases[:max(2, min_sentences)])
-    else:
-        out = " ".join(frases)
-    return _degen(out).strip().rstrip(".") + "."
+        return random.choice([2, 3])
+    if length == "medium":
+        return random.choice([3, 4])
+    return 5
+
+def _target_sentence_count(length: str) -> int:
+    """short=2–3, medium=3–4, long=5."""
+    if length == "short":
+        return random.choice([2, 3])
+    if length == "medium":
+        return random.choice([3, 4])
+    return 5
+
+def _assemble(frases, length: str, min_sentences: int) -> str:
+    # Normaliza, quita puntos finales para poder unir luego.
+    frases = [f.strip().rstrip(".") for f in frases if f and f.strip()]
+    if not frases:
+        return ""
+
+    target = max(min_sentences, _target_sentence_count(length))
+
+    # Deduplicado suave (lowercase).
+    seen = set()
+    uniq = []
+    for s in frases:
+        key = s.lower()
+        if key not in seen:
+            uniq.append(s)
+            seen.add(key)
+
+    # Si faltan frases, usa fillers variados sin repetir literal.
+    while len(uniq) < target:
+        filler = random.choice(SUMMARY_FILLERS)
+        # Parametriza si corresponde:
+        if "{industria}" in filler:
+            filler = filler.format(industria=random.choice(INDUSTRIAS))
+        elif "{skill}" in filler:
+            filler = filler.format(skill=random.choice(HARD_SKILLS_POOL))
+        key = filler.lower().rstrip(".")
+        if key not in seen:
+            uniq.append(filler.rstrip("."))
+            seen.add(key)
+
+    # Corta exactamente al objetivo y arma el párrafo.
+    out = uniq[:target]
+    paragraph = " ".join(s + "." for s in out)
+    return _degen(paragraph).strip()
+
 
 class SummaryGenerator:
     DEFAULT_FAMILY_WEIGHTS = {
@@ -80,9 +117,9 @@ class SummaryGenerator:
         family_weights=None,
         length_weights=None,
         persona_weights=None,
-        global_metrics_prob: float = 0.30,      # antes 0.18 – reintroducimos métricas
+        global_metrics_prob: float = 0.40,      # antes 0.18 – reintroducimos métricas
         metrics_ratio_by_family: dict | None = None,
-        min_sentences: int = 2,                 # asegura que “short” no sea una sola línea plana
+        min_sentences: int = 3,                 # asegura que “short” no sea una sola línea plana
         role_keywords=None, role_stacks=None,
         infer_base_role_fn=None, pick_metric_fn=None, effect_verb_fn=None,
     ):
@@ -157,30 +194,54 @@ class SummaryGenerator:
 
     # ---------- familias (actualizadas para usar min_sentences y métricas por familia) ----------
     def _f_perfil_personal(self, titulo, length, persona, family):
+        # Pools ya existentes en catalogs.py
+        from catalogs import INDUSTRIAS
         kw, tech = self._role_condiments(titulo)
-        foco = kw or random.choice([
-            "patrones claros y código legible",
-            "simplicidad y mantenibilidad",
+
+        focos = [
             "arquitecturas limpias y APIs consistentes",
-            "documentación útil y colaboración"
-        ])
-        valores = ", ".join(random.sample([
-            "calidad", "claridad", "colaboración",
-            "aprendizaje continuo", "observabilidad", "autonomía", "responsabilidad"
-        ], k=3))
+            "diseño simple y mantenible",
+            "observabilidad y confiabilidad",
+            "automatización y CI/CD",
+            "alineación técnica con objetivos de negocio",
+            "experiencia del usuario"
+        ]
+        rasgos_pool = [
+            "pensamiento claro", "comunicación abierta", "aprendizaje continuo",
+            "colaboración efectiva", "documentación útil", "enfoque práctico",
+            "orientación a valor", "autonomía con responsabilidad"
+        ]
+        foco = kw or random.choice(focos)
+        industria = random.choice(INDUSTRIAS)
+        rasgos = ", ".join(random.sample(rasgos_pool, k=3))
+
+        # 6–7 frases candidatas (el ensamblador elegirá 2/3/5 según length)
         if persona == "primera":
             frases = [
-                f"Soy {titulo.lower()} {random.choice(['práctico/a','con criterio técnico','orientado/a al valor'])}, {random.choice(_AVOID_PHRASES['orientado/a a'])} {foco}.",
-                f"Disfruto {random.choice(['resolver problemas reales','mejorar la DX','alinear técnica y producto'])}.",
-                f"Cuido {valores}." + (f" Experiencia con {tech}." if tech and random.random()<0.5 else "")
+                f"Soy {titulo.lower()} {random.choice(['práctico/a', 'con criterio técnico', 'orientado/a al valor'])}, {random.choice(['enfocado/a en', 'con foco en', 'con énfasis en', 'centrado/a en'])} {foco}",
+                f"Experiencia en contextos de {industria} y equipos multidisciplinarios",
+                f"Priorizo {random.choice(['calidad', 'mantenibilidad', 'claridad técnica'])} sin perder velocidad de entrega",
+                (f"Cómodo/a con {tech}" if tech and random.random() < 0.7 else ""),
+                f"Me interesan proyectos donde la colaboración y {rasgos} sean diferenciales",
+                f"Valoro la documentación útil como herramienta de alineación"
             ]
         else:
             frases = [
-                f"{_cap(titulo)} con foco en {foco}.",
-                f"{random.choice(['Destaca por','Sobresale por'])} {random.choice(['pensamiento claro','colaboración','comunicación abierta'])}.",
-                f"Atención a {valores}." + (f" Familiaridad con {tech}." if tech and random.random()<0.5 else "")
+                f"{_cap(titulo)} con foco en {foco}",
+                f"Experiencia en {industria} y colaboración interfuncional",
+                f"Sobresale por {rasgos}",
+                (f"Familiaridad con {tech}" if tech and random.random() < 0.7 else ""),
+                f"Atención a mantenibilidad, pruebas y estándares de calidad",
+                f"Busca equilibrar simplicidad y resultados medibles"
             ]
-        return _assemble(frases, length, self.min_sentences)
+
+        # Posible oración con métrica (según pesos de familia/global)
+        metr = self._maybe_metric_sentence(titulo, family)
+        if metr:
+            frases.append(metr.rstrip("."))
+
+        # Aseguramos mínimo 3 frases candidatas para que short nunca sea una sola oración
+        return _assemble([f for f in frases if f], length, max(self.min_sentences, 3))
 
     def _f_tecnico_especialista(self, titulo, length, persona, family):
         kw, tech = self._role_condiments(titulo)
@@ -254,10 +315,14 @@ class SummaryGenerator:
     def _f_startup_scale(self, titulo, length, persona, family):
         kw, tech = self._role_condiments(titulo)
         frases = [
-            "Ritmo startup: iteración rápida con criterio de calidad.",
-            "Equilibrio entre deuda técnica y velocidad de entrega.",
-            (f"Stack: {tech}." if tech and random.random()<0.5 else "")
+            "Ritmo startup: iteración rápida con criterio de calidad",
+            "Equilibrio entre deuda técnica y velocidad de entrega",
+            "Priorización pragmática y orientación a impacto",
+            "Capacidad para operar con ambigüedad y cambios de alcance",
+            (f"Stack: {tech}" if tech and random.random() < 0.6 else "")
         ]
+        metr = self._maybe_metric_sentence(titulo, family)
+        if metr: frases.append(metr.rstrip("."))
         return _assemble(frases, length, self.min_sentences)
 
     def _f_compliance_seguridad(self, titulo, length, persona, family):
@@ -270,10 +335,15 @@ class SummaryGenerator:
     def _f_craft_calidad(self, titulo, length, persona, family):
         kw, tech = self._role_condiments(titulo)
         frases = [
-            "Cuidado por legibilidad, pruebas y patrones claros.",
-            "Prefiero decisiones simples frente a complejidad innecesaria.",
-            (f"Entorno habitual: {tech}." if tech and random.random()<0.5 else "")
+            "Cuidado por legibilidad, pruebas y patrones claros",
+            "Prefiero decisiones simples frente a complejidad innecesaria",
+            "Enfoque en documentación clara y mantenibilidad",
+            "Colaboración para mantener calidad en revisiones de código",
+            "Atención a deuda técnica con criterio y oportunidad",
+            (f"Entorno habitual: {tech}" if tech and random.random() < 0.6 else "")
         ]
+        metr = self._maybe_metric_sentence(titulo, family)
+        if metr: frases.append(metr.rstrip("."))
         return _assemble(frases, length, self.min_sentences)
 
     def _f_community_mentoria(self, titulo, length, persona, family):

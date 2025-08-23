@@ -469,3 +469,94 @@ STACK_ALIASES.update({
     "ab testing": "ab testing",
     "looker studio": "looker",
 })
+
+SUMMARY_OPENERS = [
+    "Profesional con trayectoria en", "Especialista con foco en",
+    "Con experiencia comprobada en", "Consolidé experiencia en",
+    "Me motiva trabajar en", "Apasionado por"
+]
+
+SUMMARY_TRAITS = [
+    "pensamiento claro", "comunicación abierta", "aprendizaje continuo",
+    "colaboración efectiva", "documentación útil", "enfoque práctico",
+    "orientación a valor", "autonomía con responsabilidad"
+]
+
+SUMMARY_THEMES_GENERIC = [
+    "diseño simple y mantenible", "arquitecturas limpias y APIs consistentes",
+    "observabilidad y confiabilidad", "automatización y CI/CD",
+    "alineación técnica con objetivos de negocio", "experiencia del usuario"
+]
+
+SUMMARY_IMPACTS_NON_METRIC = [
+    "mejorando la legibilidad y la mantenibilidad del código",
+    "reduciendo fricción entre equipos y acortando ciclos",
+    "aumentando la previsibilidad de entregas",
+    "fortaleciendo prácticas de revisión y documentación",
+    "elevando la claridad de los contratos y la trazabilidad"
+]
+
+SUMMARY_CONNECTORS = ["Además", "Por otro lado", "A la par", "En paralelo", "Asimismo"]
+
+SUMMARY_FILLERS = [
+    "Interés en la mejora continua y aprendizaje constante",
+    "Capacidad de adaptación a distintos contextos y equipos",
+    "Comunicación efectiva con stakeholders técnicos y no técnicos",
+    "Enfoque en resultados medibles y colaboración transversal",
+    "Motivado por aportar valor tangible en proyectos desafiantes",
+    "Documentación útil como herramienta de alineación",
+    "Foco en claridad técnica y decisiones simples",
+    "Trabajo cómodo con metodologías ágiles y prácticas CI/CD",
+    "Experiencia en entornos {industria}",
+    "Conocimiento aplicado en {skill}"
+]
+
+# ================== BULLETS: plantillas y pools de variedad ==================
+
+# Verbos de acción (si ya tienes GOOD_VERBS, este pool lo complementa)
+BULLET_ACTIONS = [
+    "Diseñé", "Optimicé", "Implementé", "Fortalecí", "Habilités", "Automatizé",
+    "Estandaricé", "Orquesté", "Refactoricé", "Alineé", "Endurecí", "Modernicé",
+    "Integré", "Escalé", "Documenté", "Consolidé", "Aceleré", "Instrumenté"
+]
+
+# Calificadores para el objeto (se añaden después de _art_noun)
+BULLET_OBJ_QUALIFIERS = ["clave", "crítico", "principal", "core", "de misión crítica", "de alto impacto"]
+
+# Conectores ligeros para variar (opcionales)
+BULLET_CONNECTORS = ["Además", "Asimismo", "En paralelo", "A la par", "Por otro lado"]
+
+# Resultados cualitativos para bullets sin métrica
+BULLET_QUAL_IMPACTS = [
+    "elevando la mantenibilidad y la claridad técnica",
+    "reduciendo la fricción operativa y favoreciendo entregas previsibles",
+    "fortaleciendo la trazabilidad y la gobernanza",
+    "mejorando la DX y la calidad de revisiones",
+    "aumentando la fiabilidad y la capacidad de recuperación"
+]
+
+# Plantillas CON métrica (usa placeholders; se formatean en gen.py)
+BULLET_TEMPLATES_WITH_METRIC = [
+    "{act} {obj_q}; {eff} {metric} en {delta}%{horizon}.",
+    "{act} {obj_q} y {eff} tiempos de {metric} {before_after}.",
+    "{act} {obj_q}; habilité {deploys}/semana con validaciones automáticas.",
+    "{act} {obj_q} con observabilidad y SLOs; disponibilidad a 99.{nine}%.",
+    "{act} {obj_q}, procesando {volume}M de registros/día sin cuellos de botella.",
+    "{act} {obj_q}; {eff} {metric} en {delta}%{horizon}. {maybe_connector}",
+    "{act} {obj_q}; {eff} {metric} en {delta}% en {scope}.",
+]
+
+# Plantillas SIN métrica
+BULLET_TEMPLATES_NO_METRIC = [
+    "{act} {obj_q} end-to-end {scope}, con trazabilidad y rollback seguro.",
+    "{act} {obj_q} con prácticas CI/CD y pruebas; entregas previsibles y menor deuda técnica.",
+    "Automaticé tareas repetitivas en {obj}, reduciendo intervención manual y fallos operativos.",
+    "Orquesté {obj} con monitoreo y alertas accionables.",
+    "Alineé {obj} con objetivos de negocio y tiempos de salida.",
+    "Lideré la migración de {obj} a cloud, reforzando seguridad y observabilidad.",
+    "Consolidé {obj} con patrones de diseño simples y mantenibles.",
+    "Documenté {obj} con ejemplos y contratos claros para acelerar adopción.",
+    "Fortalecí {obj} con pruebas automatizadas y cobertura robusta.",
+    "Instrumenté {obj} con telemetría útil para decisiones basadas en datos.",
+    "Estandaricé {obj} con convenciones y pipelines repetibles.",
+]

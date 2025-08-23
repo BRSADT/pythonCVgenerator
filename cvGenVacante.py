@@ -32,7 +32,7 @@ from faker import Faker
 import json, os, random
 from faker import Faker
 from gen import (make_contact_good, make_summary_good, make_experience_good,
-                 make_education_good, make_skills_good,_choose_k_bad)
+                 make_education_good, make_skills_good,_choose_k_bad,make_location)
 from catalogs import JOB_TITLES
 from rules import weighted_sample_rules
 from fit import score_fit,load_vacantes
@@ -76,7 +76,7 @@ def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
                 "ctx": {"fake": fake, "titulo": titulo, "first": first, "last": last}
             },
             "identidad": {"nombre": f"{first} {last}", "titulo": titulo,
-                          "ubicacion": fake.city() + ", " + fake.country()},
+                          "ubicacion": make_location(fake)},
             "contacto": contacto, "resumen": resumen,
             "experiencia": experiencia, "educacion": educacion, "skills": skills
         }
@@ -101,7 +101,7 @@ def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
         "identidad": {
             "nombre": f"{first} {last}",
             "titulo": titulo,
-            "ubicacion": fake.city() + ", " + fake.country()
+            "ubicacion": make_location(fake)
         },
         "contacto": contacto,
         "resumen": resumen,

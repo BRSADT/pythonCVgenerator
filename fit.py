@@ -75,7 +75,17 @@ def _count_years_experience(cv):
 
 def _has_metrics(cv):
     txt = cv_plain_text(cv)
-    return bool(re.search(r"\b\d{1,3}\s?%|\b\d+\s+(mes|meses|semanas|d[ií]as)\b|\bpp\b", txt))
+    # % o puntos porcentuales
+    if re.search(r"\b\d{1,3}\s?%\b|\b\d+(\.\d+)?\s?p\.?p\.?\b", txt, flags=re.I):
+        return True
+    # before-after con unidades válidas (h|ms|min|seg)
+    if re.search(r"\bde\s+\d+(\.\d+)?\s?(h|ms|min|m|s)\s+a\s+\d+(\.\d+)?\s?(h|ms|min|m|s)\b", txt, flags=re.I):
+        return True
+    # magnitudes “M de registros/día”
+    if re.search(r"\b\d+\s?M\s+de\s+registros\/d[ií]a\b", txt, flags=re.I):
+        return True
+    return False
+
 
 def _soft_evidence(cv, soft_terms):
     exp_txt = _norm("\n".join(e.get("descripcion","") for e in cv.get("experiencia", [])))

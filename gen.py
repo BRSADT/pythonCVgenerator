@@ -20,9 +20,43 @@ from catalogs import (
     JOB_TITLES, INDUSTRIAS, EMAIL_CUTE_PATTERNS, DOMINIOS_PRO, EMOJIS,ROLE_METRICS,
     DEFAULT_METRICS,LOWER_IS_BETTER,HIGHER_IS_BETTER,EDU_FIELDS_TECH,EDU_INSTITUTIONS_GENERIC,
     CERT_CATALOG,PROF_LEVELS,HARD_CATEGORIES,ROLE_SYNONYMS, ROLE_STACKS, ROLE_KEYWORDS, ROLE_BULLETS,ROLE_SKILLS_PRESETS,_canon_role,
-    ROLE_SYNONYMS, ROLE_SKILLS_PRESETS, ROLE_SUMMARY_KEYWORDS
+    ROLE_SYNONYMS, ROLE_SKILLS_PRESETS, ROLE_SUMMARY_KEYWORDS,    BULLET_TEMPLATES_WITH_METRIC,
+    BULLET_TEMPLATES_NO_METRIC,
+    BULLET_ACTIONS,
+    BULLET_OBJ_QUALIFIERS,
+    BULLET_CONNECTORS,
+    BULLET_QUAL_IMPACTS
     # ... + catálogos de educación/certs si los usas
 )
+_ART_GENDER = {
+    "API": "la", "estrategia": "la", "herramienta": "la",
+    "plataforma": "la", "documentación": "la",
+    "pipeline": "el", "servicio": "el", "módulo": "el", "dashboard": "el", "ETL": "el", "proceso": "el", "flujo": "el"
+}
+_ART_POOL = list(_ART_GENDER.keys())
+import re, unicodedata
+
+def _slug_ascii(s: str) -> str:
+    s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+    s = re.sub(r'[^a-z0-9-]', '-', s.lower())
+    s = re.sub(r'-{2,}', '-', s).strip('-')
+    return s
+
+def _ascii_local(s: str) -> str:
+    # para email local-part (más permisivo que slug)
+    s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+    s = re.sub(r'[^a-z0-9._+-]', '', s.lower())
+    return s
+def _rng_artifact():
+    return random.choice(_ART_POOL)
+
+def _with_article(noun):
+    art = _ART_GENDER.get(noun, "")
+    return f"{_art_noun(art)}  {noun}" if art else noun
+
+def _neutral(noun):
+    # evita artículo cuando no estés seguro
+    return noun
 
 # --- Config de estilo de resumen ---
 SUMMARY_STYLE_WEIGHTS = {
@@ -84,41 +118,74 @@ def _rng_stack(stack=None):
         return ", ".join(stack[:2])
     return ", ".join(random.sample(HARD_SKILLS_POOL, k=2))
 
+# --- artículos por sustantivo (evita "el/la") ---
+_ART_GENDER = {"API":"la","pipeline":"el","servicio":"el","estrategia":"la","ETL":"el","módulo":"el","dashboard":"el"}
+def _art_noun(n):
+    art = _ART_GENDER.get(n, "")
+    return f"{_art_noun(art)}  {n}" if art else n
+
+
 def make_bullet_varied(titulo, positive=True, stack=None):
-    """Devuelve un bullet con distribución ~50% con métrica y ~50% sin métrica explícita."""
+    """Genera un bullet con alta variedad léxica y estructural."""
     metric = _pick_metric_for_role(titulo)
     eff = _effect_verb(metric, positive=positive)
     delta = random.randint(8, 45)
-    timeframe = _rng_timeframe()
+    timeframe = _rng_timeframe()  # "en 3 meses" / "" etc.
+    horizon = f" {timeframe}" if timeframe else ""
     art = _rng_artifact()
-    act = _rng_action()
+    act = random.choice(BULLET_ACTIONS)  # más variedad que GOOD_VERBS fijo
+
+    # objeto con artículo correcto + posible calificador
+    obj = _art_noun(art)
+    obj_q = obj + " " + random.choice(BULLET_OBJ_QUALIFIERS)
+
+    # variaciones numéricas y de contexto
+    before_after = _format_before_after(metric)  # usa ms/h/pp según métrica
+    volume = random.randint(5, 50)
+    deploys = random.randint(3, 12)
+    nine = random.randint(5, 9)
+    scope = _rng_scope()
+    maybe_connector = random.choice(BULLET_CONNECTORS) if random.random() < 0.35 else ""
     maybe_stack = (f" Usando {_rng_stack(stack)}." if random.random() < 0.5 else "")
 
-    templates_with_metric = [
-        # clásica con porcentaje
-        f"{act} el/la {art} clave; {eff} {metric} en {delta}%{(' ' + timeframe) if timeframe else ''}.",
-        # before → after
-        f"{act} el/la {art} y {eff} tiempos de {metric} de {random.randint(6,18)} h a {random.randint(1,5)} h.",
-        # conteos absolutos
-        f"{act} el/la {art}, procesando {random.randint(5,50)}M de registros/día sin cuellos de botella.",
-        # productividad / throughput
-        f"{act} el/la {art}; habilité {random.randint(3,12)} despliegues/semana con validaciones automáticas.",
-        # confiabilidad explícita
-        f"{act} el/la {art} con alertas y SLOs; incrementé disponibilidad a 99.{random.randint(5,9)}%."
-    ]
+    # Decide si va con métrica o cualitativo (50/50 aprox.)
+    with_metric = (random.random() < 0.5)
 
-    templates_without_metric = [
-        f"{act} el/la {art} end‑to‑end { _rng_scope() }, con trazabilidad y rollback seguro.",
-        f"Automaticé tareas repetitivas en el {art}, reduciendo intervención manual y fallos operativos.",
-        f"Orquesté el {art} con prácticas CI/CD y pruebas; entregas previsibles y menor deuda técnica.",
-        f"Colaboré con Producto/Datos para alinear el {art} a objetivos de negocio y tiempos de salida.",
-        f"Lideré la migración del {art} a cloud, endureciendo seguridad y observabilidad."
-    ]
+    tmpl_pool = BULLET_TEMPLATES_WITH_METRIC if with_metric else BULLET_TEMPLATES_NO_METRIC
+    tmpl = random.choice(tmpl_pool)
 
-    pool = templates_with_metric if random.random() < 0.5 else templates_without_metric
-    bullet = "- " + random.choice(pool)
-    return bullet + maybe_stack
+    # Rellena placeholders
+    bullet_txt = tmpl.format(
+        act=act,
+        obj=obj,
+        obj_q=obj_q,
+        eff=eff,
+        metric=metric,
+        delta=delta,
+        horizon=horizon,
+        before_after=before_after,
+        volume=volume,
+        deploys=deploys,
+        nine=nine,
+        scope=scope,
+        maybe_connector=maybe_connector
+    )
 
+    # Añade stack ocasional
+    bullet_txt = bullet_txt.strip()
+    if maybe_stack and not bullet_txt.endswith("."):
+        bullet_txt += "."
+    bullet_txt += maybe_stack
+
+    # Limpia espacios dobles y “el el / la la” si llegaran a darse por errores previos
+    bullet_txt = re.sub(r"\s{2,}", " ", bullet_txt)
+    bullet_txt = re.sub(r"\b(el|la)\s+(el|la)\b", r"\1", bullet_txt, flags=re.I)
+    bullet_txt = re.sub(r"\s+([;,:.])", r"\1", bullet_txt)  # sin espacio antes de ; , .
+    bullet_txt = bullet_txt.strip()
+    if not bullet_txt.startswith("- "):
+        bullet_txt = "- " + bullet_txt
+
+    return bullet_txt
 
 
 
@@ -333,7 +400,8 @@ def _pick_metric_for_role(titulo):
 
 def make_professional_email(first, last):
     dom = random.choice(DOMINIOS_PRO)
-    base = f"{first}.{last}".lower().replace(" ", "")
+    base = f"{_ascii_local(first)}.{_ascii_local(last)}"
+    base = re.sub(r'\.+', '.', base).strip('.')
     return f"{base}@{dom}"
 
 def make_cute_email(first, last):
@@ -341,8 +409,11 @@ def make_cute_email(first, last):
     return pattern.format(nombre=first.lower(), apellido=last.lower(), num=random.randint(7, 999))
 
 def make_linkedin(first, last):
-    handle = f"{first}-{last}".lower().replace(" ", "-")
-    return f"https://www.linkedin.com/in/{handle}{random.randint(10,99)}"
+    handle = _slug_ascii(f"{first}-{last}") + str(random.randint(10, 99))
+    return f"https://www.linkedin.com/in/{handle}"
+
+def make_web(first, last):
+    return f"https://{_slug_ascii(first+last)}.dev"
 
 SUMMARY_GEN = SummaryGenerator(
     role_keywords=ROLE_KEYWORDS,
@@ -351,7 +422,7 @@ SUMMARY_GEN = SummaryGenerator(
     pick_metric_fn=_pick_metric_for_role,
     effect_verb_fn=_effect_verb,
     # Sube longitud mínima a 2 frases y métricas globales ~30%
-    min_sentences=2,
+    min_sentences=3,
     global_metrics_prob=0.30,
     metrics_ratio_by_family={
         "data_driven": 0.60,          # muchos con métrica
@@ -470,13 +541,29 @@ def make_experience_bad(fake):
 
 def make_education_good(fake):
     grad_year = random.randint(2015, 2023)
-    return [{
+    entries = [{
         "grado": "Licenciatura",
         "area": random.choice(["Ingeniería en Computación", "Matemáticas", "Informática", "Sistemas"]),
         "institucion": fake.company() + " University",
         "fin": str(grad_year),
         "logros": "Graduación con promedio destacado. Participación en proyectos aplicados."
     }]
+    seen = {}
+    clean = []
+    for e in entries:
+        k = (e.get("grado",""), e.get("area",""), e.get("institucion",""))
+        if k in seen:
+            # Si es la misma cert/estudio y solo cambia el año, márcalo como recertificación
+            prev = seen[k]
+            if e["grado"] == "Certificación" and e["area"] == prev["area"]:
+                if e["fin"] != prev["fin"]:
+                    e["area"] = e["area"] + " (Recertificación)"
+                    clean.append(e)
+            # Si es exactamente igual, se descarta
+            continue
+        seen[k] = e
+        clean.append(e)
+    return clean
 
 def make_education_bad(fake):
     # Campos faltantes / vagos
@@ -750,3 +837,56 @@ def make_contact_bad(fake, first, last):
         "web": random.choice(["", "http://miwebgratis.tk", "http://blogspot-1998-example.com"])
     }
 
+def _norm_key(s: str) -> str:
+    return re.sub(r'\W+', ' ', (s or '').lower()).strip()
+
+def _clean_spaces(s: str) -> str:
+    # quita espacios antes de ; , .  y dobles espacios
+    s = re.sub(r'\s+([;,:.])', r'\1', s)
+    s = re.sub(r'\s{2,}', ' ', s).strip()
+    # arregla "tiempos de tiempo de"
+    s = re.sub(r'tiempos de tiempo de', 'tiempos de', s, flags=re.I)
+    return s
+
+def _dedup_bullets(lines: list[str]) -> list[str]:
+    seen, out = set(), []
+    for ln in lines:
+        k = _norm_key(ln)
+        if k in seen:
+            continue
+        out.append(_clean_spaces(ln))
+        seen.add(k)
+    return out
+
+
+WEB_MS = {"LCP","FID","TTFB"}
+WEB_PP = {"CLS"}  # puntos porcentuales
+
+def _format_before_after(metric: str) -> str:
+    m = (metric or "").upper()
+    if m in WEB_MS:
+        before = random.randint(2500, 5000)  # ms
+        after  = random.randint(800, 1800)
+        if after >= before: after = max(200, before - random.randint(400,1200))
+        return f"de {before} ms a {after} ms"
+    if m in WEB_PP:
+        # puntos en vez de horas/%
+        before = round(random.uniform(0.25, 0.35), 2)
+        after  = round(max(0.01, before - random.uniform(0.05, 0.15)), 2)
+        return f"de {before} a {after}"
+    # cobertura/tests/time-to-report/latencia → horas por defecto
+    before = random.randint(6,18)
+    after  = random.randint(1,5)
+    if after >= before: after = max(1, before - random.randint(2,5))
+    return f"de {before} h a {after} h"
+
+
+REAL_LOCS = [
+    "Ciudad de México, México", "Guadalajara, México", "Monterrey, México",
+    "Buenos Aires, Argentina", "Bogotá, Colombia", "Santiago, Chile",
+    "Madrid, España", "Barcelona, España", "Lima, Perú",
+    "Miami, Estados Unidos", "Toronto, Canadá"
+]
+
+def make_location(fake=None):
+    return random.choice(REAL_LOCS)
