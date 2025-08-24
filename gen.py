@@ -12,7 +12,62 @@ from dateutil.relativedelta import relativedelta
 from summaries import SummaryGenerator
 from typing import Optional
 from catalogs import ROLE_KEYWORDS, ROLE_STACKS
+import json, os
 
+import re
+
+_ART_FIX_RE = re.compile(r"\b(el|la)\s+(el|la)\b", flags=re.IGNORECASE)
+_DE_EL_RE  = re.compile(r"\bde\s+el\b", flags=re.IGNORECASE)
+_A_EL_RE   = re.compile(r"\ba\s+el\b", flags=re.IGNORECASE)
+_SPACE_RE  = re.compile(r"\s{2,}")
+_PLACEHOLDER_RE = re.compile(r"\bN(?:\.\d+)?%?\b", flags=re.IGNORECASE)
+_TRAIL_CONNECTOR_RE = re.compile(r"(?:\s|\b)(Además|Asimismo|En paralelo|A la par|Por otro lado)\.?$")
+
+def write_label_jsonl(cv: dict, cv_id: str, out_dir: str, jsonl_name: str = "labels.jsonl"):
+    """
+    Agrega una línea JSON con {id, label, reglas} al archivo labels.jsonl en out_dir.
+    cv_id: nombre del archivo de texto generado, p.ej. '0004_fracaso.txt' o '0011_exito.txt'
+    """
+    record = {
+        "id": cv_id,
+        "label": cv.get("meta", {}).get("label"),
+        "reglas": cv.get("meta", {}).get("reglas_aplicadas", []),
+    }
+    path = os.path.join(out_dir, jsonl_name)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+def _contract_preps(s: str) -> str:
+    s = _DE_EL_RE.sub("del", s)
+    s = _A_EL_RE.sub("al", s)
+    return s
+
+def _normalize_articles(s: str) -> str:
+    # colapsa "el el", "la la", "el la", etc. dejando el primero
+    s = _ART_FIX_RE.sub(lambda m: m.group(1), s)
+    return s
+
+def _strip_trailing_connector(s: str) -> str:
+    # remueve conectores al final de línea ("Además.", "Asimismo")
+    return _TRAIL_CONNECTOR_RE.sub("", s).strip()
+
+def _drop_or_fix_placeholders(s: str) -> str:
+    # si quedan placeholders tipo N / N.N% / N h → elimina el bullet completo
+    # para no contaminar el dataset; alternativa: podrías reemplazar por valores,
+    # pero aquí lo más seguro es descartar
+    if _PLACEHOLDER_RE.search(s) or " N h" in s or "N h " in s:
+        return ""
+    return s
+
+def _postprocess_bullet(s: str) -> str:
+    if not s:
+        return s
+    s = _contract_preps(s)
+    s = _normalize_articles(s)
+    s = _strip_trailing_connector(s)
+    s = _SPACE_RE.sub(" ", s).strip()
+    s = _drop_or_fix_placeholders(s)
+    return s
 
 
 from catalogs import (
@@ -184,6 +239,7 @@ def make_bullet_varied(titulo, positive=True, stack=None):
     bullet_txt = bullet_txt.strip()
     if not bullet_txt.startswith("- "):
         bullet_txt = "- " + bullet_txt
+
 
     return bullet_txt
 

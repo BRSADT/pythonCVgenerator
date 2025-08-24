@@ -46,8 +46,14 @@ def ensure_dir(path):
 
 
 def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
-    first = fake.first_name()
-    last = fake.last_name()
+    if random.random() < 0.5:
+        first = fake.first_name_male()
+        last = fake.last_name_male()
+        genero = "m"
+    else:
+        first = fake.first_name_female()
+        last = fake.last_name_female()
+        genero = "f"
     titulo = random.choice(JOB_TITLES)
 
     if bueno:
@@ -64,6 +70,15 @@ def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
             "fechas_consistentes", "headshot_profesional"
         ]
     else:
+        if random.random() < 0.5:
+            first = fake.first_name_male()
+            last = fake.last_name_male()
+            genero = "m"
+        else:
+            first = fake.first_name_female()
+            last = fake.last_name_female()
+            genero = "f"
+
         # 1) Partimos de un CV "bueno-neutral"
         contacto = make_contact_good(fake, first, last)
         resumen = make_summary_good(fake, titulo)
@@ -78,7 +93,7 @@ def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
             "identidad": {"nombre": f"{first} {last}", "titulo": titulo,
                           "ubicacion": make_location(fake)},
             "contacto": contacto, "resumen": resumen,
-            "experiencia": experiencia, "educacion": educacion, "skills": skills
+            "experiencia": experiencia, "educacion": educacion, "skills": skills,"genero": genero
         }
 
         k_total = _choose_k_bad(args or argparse.Namespace(bad_severity="med", bad_min=None, bad_max=None))
@@ -96,7 +111,8 @@ def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
             "label": "exito" if bueno else "fracaso",
             "locale": locale,
             "seed": seed,
-            "reglas_aplicadas": reglas_aplicadas
+            "reglas_aplicadas": reglas_aplicadas,
+            "genero": genero
         },
         "identidad": {
             "nombre": f"{first} {last}",
@@ -112,6 +128,58 @@ def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
     cleaner = CVPostCleaner()
     estructura = cleaner.clean_cv_dict(estructura)
     return estructura
+
+def write_label_jsonl(cv, fname, out_dir):
+    record = {
+        "id": fname,
+        "label": cv["meta"]["label"],
+        "reglas": cv["meta"].get("reglas_aplicadas", [])
+    }
+    with open(os.path.join(out_dir, "labels.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+def build_affinity_record_all(cv: dict, fname: str) -> dict:
+    """
+    Construye un registro con TODAS las vacantes ordenadas por score desc.
+    Incluye 'rol_cv' tomado de cv['identidad']['titulo'] y el mejor match.
+    """
+    fits = (cv.get("meta", {}) or {}).get("fits", [])
+    ordered = sorted(fits, key=lambda x: x["fit_score"], reverse=True)
+
+    vacantes = [
+        {
+            "jd": it["jd_name"],
+            "score": round(float(it["fit_score"]), 4),
+            "label": it["fit_label"]
+        }
+        for it in ordered
+    ]
+
+    mejor = None
+    if ordered:
+        top = ordered[0]
+        mejor = {
+            "jd": top["jd_name"],
+            "score": round(float(top["fit_score"]), 4),
+            "label": top["fit_label"]
+        }
+
+    return {
+        "id": fname,
+        "rol_cv": cv.get("identidad", {}).get("titulo", ""),
+        "vacantes": vacantes,
+        "mejor": mejor
+    }
+
+
+def write_affinity_jsonl(record: dict, out_dir: str, jsonl_name: str = "afinidades.jsonl"):
+    """
+    Escribe (append) una línea JSON con afinidad por CV: id, top3 y mejor.
+    """
+    path = os.path.join(out_dir, jsonl_name)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
 
 
 def cv_txt_ats(cv):
@@ -157,15 +225,22 @@ def cv_txt_ats(cv):
     lines.append(f"Soft skills: {soft}")
     lines.append("")
     # Encaje con vacantes (si existe)
-    if cv["meta"].get("fits"):
+    """if cv["meta"].get("fits"):
         lines.append("Encaje con vacantes")
         lines.append("-------------------")
         top = sorted(cv["meta"]["fits"], key=lambda x: x["fit_score"], reverse=True)[:3]
         for f in top:
             lines.append(f"- {f['jd_name']}: {f['fit_score']:.2f} ({f['fit_label']})")
-        lines.append("")
+        lines.append("")"""
     # Marcas de reglas (útil para depurar dataset)
-    lines.append(f"[Label: {cv['meta']['label']}] Reglas: {', '.join(cv['meta']['reglas_aplicadas'])}")
+    #lines.append(f"[Label: {cv['meta']['label']}] Reglas: {', '.join(cv['meta']['reglas_aplicadas'])}")
+    label_info = {
+        "id": cv.get("meta", {}).get("id", "unknown"),  # si quieres guardar el id/nombre aquí
+        "label": cv["meta"]["label"],
+        "reglas": cv["meta"].get("reglas_aplicadas", [])
+    }
+    #ines.append(json.dumps(label_info, ensure_ascii=False))
+
     raw_txt = "\n".join(lines)
     # Limpieza post-render ATS
     cleaner = CVPostCleaner()
@@ -215,7 +290,7 @@ def main():
     n_malos = args.n - n_buenos
     indices = (["exito"] * n_buenos) + (["fracaso"] * n_malos)
     random.shuffle(indices)
-
+    afinidades_acumuladas = []
     with open(jsonl_path, "w", encoding="utf-8") as fjsonl:
         for i, etiqueta in enumerate(indices, start=1):
             bueno = etiqueta == "exito"
@@ -251,6 +326,20 @@ def main():
             fname = f"{i:04d}_{etiqueta}.txt"
             with open(os.path.join(args.out, "txt", fname), "w", encoding="utf-8") as ft:
                 ft.write(txt)
+            write_label_jsonl(cv, fname, args.out)
+            # Afinidad con vacantes: JSONL por CV (usa el mismo orden y top3 que el snippet)
+            if cv.get("meta", {}).get("fits"):
+                rec = build_affinity_record_all(cv, fname)
+                write_affinity_jsonl(rec, args.out, jsonl_name="afinidades.jsonl")
+                afinidades_acumuladas.append(rec)
+                write_affinity_jsonl(rec, args.out, jsonl_name="afinidades.jsonl")
+                afinidades_acumuladas.append(rec)
+
+    # JSON agregado con todas las afinidades de la corrida
+    if afinidades_acumuladas:
+        with open(os.path.join(args.out, "afinidades.json"), "w", encoding="utf-8") as fa:
+            json.dump(afinidades_acumuladas, fa, ensure_ascii=False, indent=2)
+
 
     print("==== RESUMEN DE GENERACIÓN ====")
     print(f"Total: {args.n}")

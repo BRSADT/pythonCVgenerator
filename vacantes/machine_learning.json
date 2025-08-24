@@ -1,0 +1,32 @@
+{
+  "name": "Científico/a de Datos en Machine Learning",
+  "role_title": "Data Scientist - Machine Learning & NLP",
+  "threshold": 0.70,
+  "min_years_exp": 2,
+  "weights": { "keywords": 0.40, "stack": 0.35, "exp": 0.10, "metrics": 0.10, "soft": 0.00, "nice": 0.05 },
+
+  "must_keywords": [
+    "machine learning",
+    "nlp",
+    "modelos",
+    "clasificacion",
+    "regresion"
+  ],
+  "required_stack": [
+    "python",
+    "scikit-learn",
+    "pandas",
+    "numpy",
+    "tensorflow",
+    "pytorch",
+    "spacy",
+    "transformers",
+    "sql"
+  ],
+  "required_min_coverage": 0.7,
+
+  "nice_to_have": [
+    "plotly", "dash", "shap", "xgboost"
+  ],
+  "soft_required": []
+}

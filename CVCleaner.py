@@ -2,7 +2,30 @@
 import re
 from datetime import datetime
 import json, os, random
+import re
 class CVPostCleaner:
+    import re
+
+    DE_EL_RE = re.compile(r"\bde\s+el\b", flags=re.IGNORECASE)
+    A_EL_RE = re.compile(r"\ba\s+el\b", flags=re.IGNORECASE)
+    ART_DUP_RE = re.compile(r"\b(el|la)\s+(el|la)\b", flags=re.IGNORECASE)
+    PLACEHOLDER_RE = re.compile(r"\bN(?:\.\d+)?%?\b", flags=re.IGNORECASE)
+    SPACE_RE = re.compile(r"\s{2,}")
+    TRAIL_CONNECTOR_RE = re.compile(r"(?:\s|\b)(Además|Asimismo|En paralelo|A la par|Por otro lado)\.?$")
+
+    def _fix_spanish_grammar(self, s: str) -> str:
+        s = DE_EL_RE.sub("del", s)
+        s = A_EL_RE.sub("al", s)
+        s = ART_DUP_RE.sub(lambda m: m.group(1), s)
+        s = SPACE_RE.sub(" ", s)
+        return s.strip()
+
+    def _strip_trailing_connector(self, s: str) -> str:
+        return TRAIL_CONNECTOR_RE.sub("", s).strip()
+
+    def _is_bad_placeholder_line(self, s: str) -> bool:
+        return bool(PLACEHOLDER_RE.search(s) or " N h" in s or "N h " in s)
+
     TODAY = datetime.today()
     DATE_RE = re.compile(r"(\d{4})-(\d{2})")
     ROLE_HEADER_RE = re.compile(r"^(.+?)\s*\|\s*(.+?)\s*\|\s*(\d{4}-\d{2})\s*—\s*(Actual|\d{4}-\d{2})\s*$")

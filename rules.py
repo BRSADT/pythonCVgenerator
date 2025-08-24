@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional
 import random
 import re
+from gen import rnd_typos
 
 # Generadores usados por los degraders y utilidades
 from gen import (
@@ -27,6 +28,138 @@ from catalogs import (
 )
 
 # =============== helpers internos ===============
+def ar_personal_data_in_resumen(cv: dict) -> Optional[str]:
+    """ Mete datos personales innecesarios directamente en el RESUMEN. """
+    genero = cv.get("meta", {}).get("genero", "m")  # default m si no está
+
+    edad = random.randint(21, 45)
+    if genero == "f":
+        estado = "soltera"
+    else:
+        estado = "soltero"
+
+    hijos = random.choice(["sin hijos", "1 hijo", "2 hijos"])
+    religion = random.choice(["católica", "cristiana", "ninguna"])
+    dom = random.choice(["Av. Siempre Viva 742, CDMX", "Calle Falsa 123, GDL"])
+
+    base = (cv.get("resumen") or "").strip()
+    inj = f"Tengo {edad} años, {estado}, {hijos}, religión {religion}, domicilio {dom}. "
+    cv["resumen"] = (inj + base).strip()
+    return "datos_personales_en_resumen"
+
+
+def ar_personal_data_in_resumen(cv: dict) -> Optional[str]:
+    """ Mete datos personales innecesarios directamente en el RESUMEN. """
+    edad = random.randint(21, 45)
+    estado = random.choice(["soltero/a", "casado/a"])
+    hijos = random.choice(["sin hijos", "1 hijo", "2 hijos"])
+    religion = random.choice(["católica", "cristiana", "ninguna"])
+    dom = random.choice(["Av. Siempre Viva 742, CDMX", "Calle Falsa 123, GDL"])
+    base = (cv.get("resumen") or "").strip()
+    inj = f"Tengo {edad} años, {estado}, {hijos}, religión {religion}, domicilio {dom}. "
+    cv["resumen"] = (inj + base).strip()
+    return "datos_personales_en_resumen"
+
+def ar_hobbies_irrelevantes_en_resumen(cv: dict) -> Optional[str]:
+    """ Inserta hobbies/pop-culture irrelevantes en el RESUMEN. """
+    extras = [
+        # Cultura pop y fandoms
+        "Me gusta Marvel y el MCU",
+        "Fan de Star Wars y colecciono sables láser",
+        "Adicto a ver series de anime (Naruto, One Piece, etc.)",
+        "Soy gamer de Fortnite y Call of Duty",
+        "Me gusta hacer speedruns de Zelda",
+        "Fanático de Dragon Ball desde niño",
+
+        # Deportes y equipos (irrelevantes para la vacante)
+        "Soy fan del Atlas",
+        "Sigo todos los partidos del Real Madrid",
+        "Juego FIFA en línea todos los días",
+        "Mi pasatiempo es el fantasy football",
+
+        # Redes sociales y lifestyle
+        "Sigo realities y hago trends de TikTok",
+        "Subo reseñas de comida en mi Instagram",
+        "Me encanta grabar vlogs para YouTube",
+        "Participo en retos de baile de TikTok",
+        "Influencer amateur en Snapchat",
+
+        # Hobbies triviales
+        "Colecciono estampas del Mundial",
+        "Juego lotería con mi familia cada domingo",
+        "Me gusta hacer memes en mis ratos libres",
+        "Fanático de los Funko Pop",
+        "Paso horas armando rompecabezas",
+        "Hago cosplay en mis tiempos libres",
+    ]
+    cv["resumen"] = (cv.get("resumen") or "") + " " + random.choice(extras)
+    return "hobbies_irrelevantes_en_resumen"
+
+
+def ar_experiencia_solo_tareas_y_motivo_salida(cv: dict) -> Optional[str]:
+    """Convierte descripciones en listados de tareas genéricas y añade motivo de salida."""
+    exps = cv.get("experiencia", [])
+    if not exps: return None
+    plantillas = [
+        "- Responsable de reportes y apoyo general.\n- Seguimiento de pendientes.\n- Elaboración de minutas.",
+        "- Carga de datos y tareas administrativas.\n- Apoyo al área.\n- Revisión de correo.",
+        "- Organización de archivos.\n- Actualización de Excel.\n- Llamadas básicas.",
+        "- Control de agendas.\n- Apoyo en logística de reuniones.\n- Elaboración de presentaciones sencillas.",
+        "- Recepción y canalización de llamadas.\n- Atención a solicitudes internas.\n- Redacción de oficios simples.",
+        "- Actualización de bases de datos.\n- Apoyo en inventario.\n- Digitalización de documentos.",
+        "- Coordinación de mensajería.\n- Preparación de reportes básicos.\n- Monitoreo de entregas.",
+        "- Gestión de citas.\n- Registro de información.\n- Comunicación con proveedores.",
+        "- Seguimiento de trámites.\n- Control de asistencia.\n- Apoyo en archivo físico y digital.",
+        "- Revisión de documentos.\n- Apoyo en procesos de compras.\n- Recepción de correspondencia.",
+        "- Captura de información en sistema.\n- Preparación de listados.\n- Apoyo al área contable.",
+        "- Elaboración de reportes sencillos.\n- Control de formatos.\n- Atención de llamadas internas.",
+
+    ]
+    for e in exps:
+        e["descripcion"] = random.choice(plantillas) + "\n- Motivo de salida: " + random.choice(
+            ["me despidieron", "renuncia por motivos personales", "fin de contrato"]
+        )
+    return "experiencia_tareas_motivo_salida"
+
+def ar_shuffle_cronologia_y_gaps(cv: dict) -> Optional[str]:
+    """Desordena experiencias y crea gaps largos sin explicación (cleaner no reordena global)."""
+    exps = cv.get("experiencia", [])
+    if len(exps) < 2: return None
+    random.shuffle(exps)  # desorden
+    # crea un gap retrocediendo inicio de una experiencia intermedia
+    i = random.randrange(len(exps))
+    try:
+        yi, mi = map(int, (exps[i].get("inicio") or "0000-01").split("-"))
+        gap_m = random.choice([12, 18, 24, 36])
+        yi = max(2000, yi - gap_m // 12)
+        mi = max(1, min(12, mi))
+        exps[i]["inicio"] = f"{yi:04d}-{mi:02d}"
+    except Exception:
+        pass
+    cv["experiencia"] = exps
+    return "desorden_temporal_y_gaps"
+
+def ar_objetivo_vacio_cliche(cv: dict) -> Optional[str]:
+    cv["resumen"] = "Busco crecer en una empresa para dar lo mejor de mí."
+    return "objetivo_vacio_cliche"
+
+def ar_redundancias_y_exageraciones(cv: dict) -> Optional[str]:
+    """Duplica descripciones entre experiencias y añade claims grandilocuentes sin sustento."""
+    exps = cv.get("experiencia", [])
+    if len(exps) < 2: return None
+    base = exps[0].get("descripcion") or "- Encargado de diversas tareas del área."
+    for e in exps[1:]:
+        e["descripcion"] = (base + "\n- Líder visionario con pensamiento disruptivo.").strip()
+    return "redundancias_y_exageraciones"
+
+def ar_typos_global(cv: dict) -> Optional[str]:
+    """Inyecta typos en resumen y experiencias (usa rnd_typos existente)."""
+    if cv.get("resumen"):
+        cv["resumen"] = rnd_typos(cv["resumen"], prob=0.10, orto_prob=0.08, accent_prob=0.06)
+    for e in (cv.get("experiencia") or []):
+        if e.get("descripcion"):
+            e["descripcion"] = rnd_typos(e["descripcion"], prob=0.10, orto_prob=0.08, accent_prob=0.06)
+    return "errores_forma_typos"
 
 def _ensure_extras(cv: dict) -> None:
     if "extras" not in cv:
@@ -219,6 +352,32 @@ EXCLUSIVE_GROUPS = {
     "contact": {ar_degrade_contact, ar_contact_block_huge, ar_links_broken, ar_cute_email},
     "education": {ar_degrade_education},
 }
+
+EXCLUSIVE_GROUPS.setdefault("summary", set()).update({
+    ar_degrade_summary,
+    ar_personal_data_in_resumen,
+    ar_hobbies_irrelevantes_en_resumen,
+    ar_emojis_uppercase_summary,
+})
+
+EXCLUSIVE_GROUPS.setdefault("experience", set()).update({
+    ar_degrade_experience,
+    ar_no_metrics,
+    ar_remove_descriptions,
+})
+
+EXCLUSIVE_GROUPS.setdefault("education", set()).update({
+    ar_degrade_education,
+})
+
+EXCLUSIVE_GROUPS.setdefault("skills", set()).update({
+    ar_degrade_skills,
+    ar_missing_hard_skills,
+    ar_skills_solo_soft,
+    ar_skills_irrelevantes,
+    ar_skills_desalineadas,
+})
+
 FUNC2GROUP = {f: g for g, fs in EXCLUSIVE_GROUPS.items() for f in fs}
 
 def apply_rules_with_exclusivity(cv_tmp: dict, funcs: List[Callable[[dict], Optional[str]]]) -> List[str]:
@@ -270,6 +429,24 @@ RULES: List[Rule] = [
     Rule("skills_solo_soft",   "skills",     0.25, ar_skills_solo_soft),
     Rule("skills_irrelevantes","skills",     0.20, ar_skills_irrelevantes),
     Rule("skills_desalineadas","skills",     0.20, ar_skills_desalineadas),
+
+    # ===================== NUEVAS ANTI‑REGLAS DE CONTENIDO =====================
+
+    # Resumen mal usado: datos personales/hobbies/objetivo vacío
+    Rule("datos_personales_en_resumen", "summary", 0.25, ar_personal_data_in_resumen),
+    Rule("hobbies_irrelevantes", "summary", 0.18, ar_hobbies_irrelevantes_en_resumen),
+
+
+    Rule("datos_personales_en_resumen", "summary", 0.25, ar_personal_data_in_resumen),
+    Rule("hobbies_irrelevantes", "summary", 0.18, ar_hobbies_irrelevantes_en_resumen),
+    Rule("objetivo_vacio_cliche", "summary", 0.20, ar_objetivo_vacio_cliche),
+
+    Rule("tareas_y_motivo_salida", "experience", 0.25, ar_experiencia_solo_tareas_y_motivo_salida),
+    Rule("desorden_y_gaps", "experience", 0.22, ar_shuffle_cronologia_y_gaps),
+    Rule("redundancias_exageraciones", "experience", 0.18, ar_redundancias_y_exageraciones),
+
+    Rule("errores_forma_typos", "summary", 0.20, ar_typos_global),
+
 ]
 
 def weighted_sample_rules(k: int, allow_multi_per_group: bool = False) -> List[Rule]:
