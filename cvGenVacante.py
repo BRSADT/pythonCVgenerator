@@ -37,7 +37,7 @@ from catalogs import JOB_TITLES
 from rules import weighted_sample_rules
 from fit import score_fit,load_vacantes
 from rules import weighted_sample_rules, apply_rules_with_exclusivity, RULES
-
+from CVCleaner import CVPostCleaner
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 
@@ -109,6 +109,8 @@ def generar_cv(fake, bueno=True, locale="es_MX", seed=None, args=None):
         "educacion": educacion,
         "skills": skills
     }
+    cleaner = CVPostCleaner()
+    estructura = cleaner.clean_cv_dict(estructura)
     return estructura
 
 
@@ -164,7 +166,11 @@ def cv_txt_ats(cv):
         lines.append("")
     # Marcas de reglas (útil para depurar dataset)
     lines.append(f"[Label: {cv['meta']['label']}] Reglas: {', '.join(cv['meta']['reglas_aplicadas'])}")
-    return "\n".join(lines)
+    raw_txt = "\n".join(lines)
+    # Limpieza post-render ATS
+    cleaner = CVPostCleaner()
+    return cleaner.clean_txt(raw_txt)
+
 
 # ----------------------------
 # Main CLI
