@@ -9,6 +9,30 @@ class CVPostCleaner:
     BULLET_RE = re.compile(r"^\s*-\s+")
     SENT_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 
+
+    def _strip_trailing_connector(self, s: str) -> str:
+        # Quita conectores si quedaron "colgando" al final del bullet
+        tail_re = re.compile(r'\s*(Además|Asimismo|En paralelo|A la par|Por otro lado)\.?$', re.I)
+        return tail_re.sub('', s).strip()
+
+    def _normalize_bullet_text(self, s: str) -> str:
+        # Arreglos gramaticales rápidos y espacios / artículos
+        s = self._fix_line(s)
+        # “en para” → “para”, “a a” → “a”
+        s = re.sub(r'\ben\s+para\b', 'para', s, flags=re.I)
+        s = re.sub(r'\ba\s+a\b', 'a', s, flags=re.I)
+        # “el el / la la” ya lo corrige _fix_redundancies, reforzamos artículos con sustantivo neutro
+        s = re.sub(r'\b(el|la)\s+(el|la)\b', r'\1', s, flags=re.I)
+        # Evita "el la API", "el la estrategia" (cuando _art_noun generó discordancia)
+        s = re.sub(r'\b(el|la)\s+(la|el)\s+(\bapi\b|\bestrategia\b|\bplataforma\b|\binterfaz\b|\balerta\b)',
+                   r'\2 \3', s, flags=re.I)
+        # Quita conectores sueltos al final
+        s = self._strip_trailing_connector(s)
+        return s
+
+
+
+
     def _norm_key(self, s: str) -> str:
         return re.sub(r'\W+', ' ', (s or '').lower()).strip()
 
@@ -25,11 +49,24 @@ class CVPostCleaner:
         return s
 
     def _fix_redundancies(self, s: str) -> str:
-        s = re.sub(r'tiempos de tiempo de', 'tiempos de', s, flags=re.I)
+        # repeticiones obvias
         s = re.sub(r'\b(\w+)\s+\1\b', r'\1', s, flags=re.I)  # de de, el el, etc.
-        # Verbos mal acentuados frecuentes (sin tocar mayúsculas intermedias)
+        s = re.sub(r'\btimes? de tiempo de\b', 'tiempos de', s, flags=re.I)
+
+        # errores de acentuación comunes en verbos de acción del pool
         s = re.sub(r'\bAutomatizé\b', 'Automaticé', s)
         s = re.sub(r'\bHabilités\b', 'Habilité', s)
+        s = re.sub(r'\bAlineé\b', 'Alineé', s)  # por si acaso en min/mayus
+        s = re.sub(r'\bOrquesté\b', 'Orquesté', s)
+
+        # conectores duplicados
+        s = re.sub(r'\b(Además|Asimismo|En paralelo|A la par|Por otro lado)(\s+\1)+', r'\1', s, flags=re.I)
+
+        # espacios y puntuación redundante tipo " ,", " ;"
+        s = re.sub(r'\s+([;,:.])', r'\1', s)
+        s = re.sub(r'\s{2,}', ' ', s)
+        return s
+
         return s
 
     def _fix_line(self, s: str) -> str:
@@ -122,8 +159,13 @@ class CVPostCleaner:
             e2 = e.copy()
             e2["descripcion"] = "\n".join(bullets)
             exp_fixed.append(e2)
+
+        # 1) Fechas realistas
         exp_fixed = self._fix_experience_dates(exp_fixed)
+        # 2) Solo un 'Actual'
+        exp_fixed = self._limit_current_roles(exp_fixed, max_current=1)
         cv2["experiencia"] = exp_fixed
+
 
         # Educación
         cv2["educacion"] = self._dedup_education_entries(cv2.get("educacion") or [])
@@ -169,14 +211,45 @@ class CVPostCleaner:
         out, seen = [], set()
         for ln in lines:
             if self.BULLET_RE.match(ln):
-                k = self._norm_key(ln)
+                fixed = self._normalize_bullet_text(ln)
+                k = self._norm_key(fixed)
                 if k in seen:
                     continue
                 seen.add(k)
-                out.append(self._fix_line(ln))
+                out.append(fixed)
             else:
                 out.append(self._fix_line(ln))
         return out
+
+    def _limit_current_roles(self, exp_list: list[dict], max_current: int = 1) -> list[dict]:
+        """
+        Deja como 'Actual' solo la experiencia más reciente (por 'inicio').
+        Las demás 'Actual' se cierran en su 'inicio' (conservador y coherente).
+        """
+        def parse_ym(s: str):
+            try:
+                y, m = map(int, (s or "0000-01").split("-"))
+                return (y, m)
+            except Exception:
+                return (0, 0)
+
+        idx_current = [(i, e) for i, e in enumerate(exp_list or []) if (e.get("fin") or "").strip() == "Actual"]
+        if len(idx_current) <= max_current:
+            return exp_list
+
+        # mantén como Actual la más reciente por 'inicio'
+        idx_current_sorted = sorted(idx_current, key=lambda t: parse_ym(t[1].get("inicio")), reverse=True)
+        keep_idx = idx_current_sorted[0][0]
+
+        for idx, e in idx_current_sorted[1:]:
+            ini = e.get("inicio") or ""
+            # cerramos en su 'inicio' (evita inconsistencias)
+            e2 = e.copy()
+            e2["fin"] = self._cap_future_ym(ini)
+            exp_list[idx] = e2
+
+        return exp_list
+
 
     def _cap_future_in_header(self, line: str) -> str:
         m = self.ROLE_HEADER_RE.match(line.strip())
@@ -265,4 +338,12 @@ class CVPostCleaner:
             else:
                 final.append(ln); last_blank = False
 
-        return "\n".join(final).strip() + "\n"
+        txt = "\n".join(final).strip() + "\n"
+        # barrido final de conectores al final de línea
+        fixed_lines = []
+        for ln in txt.splitlines():
+            if self.BULLET_RE.match(ln):
+                ln = self._strip_trailing_connector(ln)
+            fixed_lines.append(self._fix_line(ln))
+        return "\n".join(fixed_lines).strip() + "\n"
+
